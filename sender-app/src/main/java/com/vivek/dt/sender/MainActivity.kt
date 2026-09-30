@@ -2,6 +2,7 @@ package com.vivek.dt.sender
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
@@ -33,20 +34,21 @@ class MainActivity : Activity() {
             )
     }
 
-    private lateinit var statusText: TextView
-    private lateinit var deviceText: TextView
-    private lateinit var scanButton: Button
-    private lateinit var connectButton: Button
-    private lateinit var dragonButton: Button
-    private lateinit var tigerButton: Button
-
     private var bluetoothAdapter: BluetoothAdapter? = null
-    private var bluetoothDevice: BluetoothDevice? = null
+
     private var bluetoothSocket: BluetoothSocket? = null
+
     private var outputStream: OutputStream? = null
 
-    private var analyzerAddress: String? = null
-    private var analyzerName: String? = null
+    private var selectedDevice: BluetoothDevice? = null
+
+    private lateinit var statusText: TextView
+
+    private lateinit var connectButton: Button
+
+    private lateinit var dragonButton: Button
+
+    private lateinit var tigerButton: Button
 
     override fun onCreate(
         savedInstanceState: Bundle?
@@ -59,12 +61,8 @@ class MainActivity : Activity() {
 
         createUI()
 
-        requestRequiredPermissions()
+        requestPermissions()
     }
-
-    // =========================================================
-    // UI
-    // =========================================================
 
     private fun createUI() {
 
@@ -75,35 +73,28 @@ class MainActivity : Activity() {
             LinearLayout.VERTICAL
 
         layout.setPadding(
-            40,
-            50,
-            40,
-            40
+            30,
+            30,
+            30,
+            30
         )
 
         val title =
             TextView(this)
 
         title.text =
-            "🐉 DRAGON TIGER SENDER"
+            "📱 DRAGON TIGER SENDER"
 
         title.textSize =
-            25f
+            24f
 
-        val subtitle =
-            TextView(this)
-
-        subtitle.text =
-            "Game Result Sender"
-
-        subtitle.textSize =
-            17f
+        layout.addView(title)
 
         statusText =
             TextView(this)
 
         statusText.text =
-            "🔴 Bluetooth: Not Connected"
+            "Status: Ready"
 
         statusText.textSize =
             18f
@@ -112,150 +103,104 @@ class MainActivity : Activity() {
             0,
             30,
             0,
-            20
+            30
         )
 
-        deviceText =
-            TextView(this)
+        layout.addView(statusText)
 
-        deviceText.text =
-            "Analyzer: Not Selected"
-
-        deviceText.textSize =
-            16f
-
-        deviceText.setPadding(
-            0,
-            10,
-            0,
-            20
-        )
-
-        scanButton =
+        val scanButton =
             Button(this)
 
         scanButton.text =
             "📷 SCAN ANALYZER QR"
 
+        scanButton.setOnClickListener {
+
+            scanQR()
+        }
+
+        layout.addView(scanButton)
+
         connectButton =
             Button(this)
 
         connectButton.text =
-            "🔵 CONNECT BLUETOOTH"
+            "🔗 CONNECT"
+
+        connectButton.isEnabled =
+            false
+
+        connectButton.setOnClickListener {
+
+            connectToSelectedDevice()
+        }
+
+        layout.addView(connectButton)
 
         dragonButton =
             Button(this)
 
         dragonButton.text =
-            "🐉 DRAGON"
+            "🐉 SEND DRAGON"
 
         dragonButton.isEnabled =
             false
+
+        dragonButton.setOnClickListener {
+
+            sendResult("DRAGON")
+        }
+
+        layout.addView(dragonButton)
 
         tigerButton =
             Button(this)
 
         tigerButton.text =
-            "🐯 TIGER"
+            "🐯 SEND TIGER"
 
         tigerButton.isEnabled =
             false
 
-        layout.addView(title)
-        layout.addView(subtitle)
-        layout.addView(statusText)
-        layout.addView(deviceText)
-        layout.addView(scanButton)
-        layout.addView(connectButton)
-        layout.addView(dragonButton)
+        tigerButton.setOnClickListener {
+
+            sendResult("TIGER")
+        }
+
         layout.addView(tigerButton)
 
         setContentView(layout)
-
-        scanButton.setOnClickListener {
-            startQRScanner()
-        }
-
-        connectButton.setOnClickListener {
-            connectToAnalyzer()
-        }
-
-        dragonButton.setOnClickListener {
-            sendResult("DRAGON")
-        }
-
-        tigerButton.setOnClickListener {
-            sendResult("TIGER")
-        }
     }
 
-    // =========================================================
-    // PERMISSIONS
-    // =========================================================
+    private fun requestPermissions() {
 
-    private fun requestRequiredPermissions() {
-
-        val permissions =
-            mutableListOf<String>()
-
-        if (
-            Build.VERSION.SDK_INT >=
-            Build.VERSION_CODES.S
-        ) {
-
-            permissions.add(
-                Manifest.permission.BLUETOOTH_SCAN
-            )
-
-            permissions.add(
-                Manifest.permission.BLUETOOTH_CONNECT
-            )
-        }
-
-        permissions.add(
-            Manifest.permission.CAMERA
-        )
-
-        val missing =
-            permissions.filter {
-
-                ActivityCompat.checkSelfPermission(
-                    this,
-                    it
-                ) !=
-                    PackageManager.PERMISSION_GRANTED
-            }
-
-        if (missing.isNotEmpty()) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
 
             ActivityCompat.requestPermissions(
                 this,
-                missing.toTypedArray(),
+                arrayOf(
+                    Manifest.permission.BLUETOOTH_CONNECT,
+                    Manifest.permission.BLUETOOTH_SCAN,
+                    Manifest.permission.CAMERA
+                ),
+                REQUEST_PERMISSIONS
+            )
+
+        } else {
+
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(
+                    Manifest.permission.CAMERA
+                ),
                 REQUEST_PERMISSIONS
             )
         }
     }
 
-    // =========================================================
-    // QR
-    // =========================================================
-
-    private fun startQRScanner() {
+    private fun scanQR() {
 
         try {
-
-            if (
-                ActivityCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.CAMERA
-                ) !=
-                PackageManager.PERMISSION_GRANTED
-            ) {
-
-                requestRequiredPermissions()
-
-                return
-            }
 
             val integrator =
                 IntentIntegrator(this)
@@ -265,20 +210,22 @@ class MainActivity : Activity() {
             )
 
             integrator.setPrompt(
-                "Analyzer का QR Code scan करें"
+                "Analyzer QR को Scan करें"
             )
 
             integrator.setBeepEnabled(true)
 
-            integrator.setOrientationLocked(true)
+            integrator.setOrientationLocked(false)
 
             integrator.initiateScan()
 
         } catch (e: Exception) {
 
-            showToast(
-                "QR error: ${e.message}"
-            )
+            Toast.makeText(
+                this,
+                "Scanner error: ${e.message}",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 
@@ -288,7 +235,7 @@ class MainActivity : Activity() {
         data: Intent?
     ) {
 
-        val result =
+        val result: IntentResult? =
             IntentIntegrator.parseActivityResult(
                 requestCode,
                 resultCode,
@@ -297,16 +244,15 @@ class MainActivity : Activity() {
 
         if (result != null) {
 
-            if (result.contents != null) {
+            if (result.contents == null) {
 
-                processQRData(
-                    result.contents
-                )
+                statusText.text =
+                    "QR Scan Cancelled"
 
             } else {
 
-                showToast(
-                    "QR cancelled"
+                processQR(
+                    result.contents
                 )
             }
 
@@ -320,289 +266,276 @@ class MainActivity : Activity() {
         )
     }
 
-    // =========================================================
-    // QR DATA
-    // =========================================================
-
-    private fun processQRData(
+    private fun processQR(
         qrData: String
     ) {
 
-        try {
+        val parts =
+            qrData.split("|")
 
-            val data =
-                qrData.trim()
+        if (parts.size < 2) {
 
-            val parts =
-                data.split("|")
-
-            if (
-                parts.size >= 3 &&
-                parts[0].trim()
-                    .equals(
-                        "DRAGON_TIGER_ANALYZER",
-                        ignoreCase = true
-                    )
-            ) {
-
-                val name =
-                    parts[1].trim()
-
-                val mac =
-                    parts[2].trim()
-
-                if (
-                    !isBluetoothMac(mac)
-                ) {
-
-                    deviceText.text =
-                        "QR Data:\n$data"
-
-                    showToast(
-                        "Invalid Bluetooth MAC"
-                    )
-
-                    return
-                }
-
-                analyzerName =
-                    name.ifBlank {
-                        "Analyzer"
-                    }
-
-                analyzerAddress =
-                    mac
-
-                deviceText.text =
-                    "Analyzer: $analyzerName\n" +
-                    "MAC: $analyzerAddress"
-
-                statusText.text =
-                    "🟡 Analyzer selected\n" +
-                    "अब CONNECT दबाएँ"
-
-                showToast(
-                    "Analyzer QR scanned"
-                )
-
-                return
-            }
-
-            deviceText.text =
-                "QR Data:\n$data"
-
-            showToast(
-                "Invalid Analyzer QR Code"
-            )
-
-        } catch (e: Exception) {
-
-            showToast(
-                "QR error: ${e.message}"
-            )
-        }
-    }
-
-    private fun isBluetoothMac(
-        value: String
-    ): Boolean {
-
-        return Regex(
-            "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$"
-        ).matches(value)
-    }
-
-    // =========================================================
-    // BLUETOOTH CONNECT
-    // =========================================================
-
-    private fun connectToAnalyzer() {
-
-        val address =
-            analyzerAddress
-
-        if (address.isNullOrBlank()) {
-
-            showToast(
-                "पहले Analyzer QR scan करें"
-            )
+            statusText.text =
+                "Invalid Analyzer QR"
 
             return
         }
+
+        if (
+            parts[0] !=
+            "DRAGON_TIGER_ANALYZER"
+        ) {
+
+            statusText.text =
+                "This is not a Dragon Tiger Analyzer QR"
+
+            return
+        }
+
+        /*
+         * IMPORTANT:
+         *
+         * No MAC address is read.
+         *
+         * QR only confirms that this is
+         * our Analyzer application.
+         */
+
+        statusText.text =
+            "Analyzer QR detected.\nSearching paired devices..."
+
+        findPairedDevices()
+    }
+
+    private fun findPairedDevices() {
 
         val adapter =
             bluetoothAdapter
 
         if (adapter == null) {
 
-            showToast(
-                "Bluetooth unavailable"
-            )
+            statusText.text =
+                "Bluetooth not supported"
 
             return
         }
 
-        if (
-            Build.VERSION.SDK_INT >=
-            Build.VERSION_CODES.S
-        ) {
+        if (!adapter.isEnabled) {
 
-            if (
-                ActivityCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.BLUETOOTH_CONNECT
-                ) !=
-                PackageManager.PERMISSION_GRANTED
-            ) {
+            statusText.text =
+                "Please turn Bluetooth ON"
 
-                requestRequiredPermissions()
-
-                return
-            }
+            return
         }
 
         try {
 
-            if (!adapter.isEnabled) {
+            val devices =
+                adapter.bondedDevices.toList()
 
-                startActivity(
-                    Intent(
-                        BluetoothAdapter.ACTION_REQUEST_ENABLE
-                    )
-                )
+            if (devices.isEmpty()) {
+
+                statusText.text =
+                    "No paired Bluetooth device found.\n" +
+                    "Pair Analyzer phone first."
 
                 return
             }
 
+            showPairedDevices(
+                devices
+            )
+
+        } catch (e: SecurityException) {
+
+            statusText.text =
+                "Bluetooth permission required"
+
         } catch (e: Exception) {
 
-            showToast(
-                "Bluetooth error: ${e.message}"
+            statusText.text =
+                "Device search error: ${e.message}"
+        }
+    }
+
+    private fun showPairedDevices(
+        devices: List<BluetoothDevice>
+    ) {
+
+        val names =
+            devices.map {
+
+                try {
+
+                    it.name ?: "Unknown Device"
+
+                } catch (e: Exception) {
+
+                    "Bluetooth Device"
+                }
+            }.toTypedArray()
+
+        AlertDialog.Builder(this)
+            .setTitle(
+                "Select Analyzer Phone"
             )
+            .setItems(names) { _, which ->
+
+                selectedDevice =
+                    devices[which]
+
+                val name =
+                    try {
+
+                        selectedDevice?.name
+                            ?: "Unknown"
+
+                    } catch (e: Exception) {
+
+                        "Bluetooth Device"
+                    }
+
+                statusText.text =
+                    "Selected Analyzer:\n$name"
+
+                connectButton.isEnabled =
+                    true
+            }
+            .setNegativeButton(
+                "Cancel",
+                null
+            )
+            .show()
+    }
+
+    private fun connectToSelectedDevice() {
+
+        val device =
+            selectedDevice
+
+        if (device == null) {
+
+            Toast.makeText(
+                this,
+                "पहले Analyzer device select करें",
+                Toast.LENGTH_SHORT
+            ).show()
 
             return
         }
 
-        statusText.text =
-            "🟡 Connecting..."
+        connectButton.isEnabled =
+            false
 
-        enableResultButtons(false)
+        statusText.text =
+            "Connecting..."
 
         thread {
 
-            var socket:
-                BluetoothSocket? = null
+            var socket: BluetoothSocket? =
+                null
 
             try {
 
-                val device =
-                    adapter.getRemoteDevice(
-                        address
-                    )
-
-                bluetoothDevice =
-                    device
-
-                try {
-                    adapter.cancelDiscovery()
-                } catch (_: Exception) {
-                }
-
                 /*
-                 * First attempt:
-                 * Secure RFCOMM
+                 * First try secure RFCOMM.
                  */
 
-                try {
-
-                    socket =
-                        device.createRfcommSocketToServiceRecord(
-                            SERVICE_UUID
-                        )
-
-                    socket.connect()
-
-                } catch (secureError: Exception) {
-
-                    /*
-                     * Secure connection failed.
-                     * Try insecure RFCOMM fallback.
-                     */
-
-                    try {
-                        socket?.close()
-                    } catch (_: Exception) {
-                    }
-
-                    socket =
-                        device.createInsecureRfcommSocketToServiceRecord(
-                            SERVICE_UUID
-                        )
-
-                    socket.connect()
-                }
+                socket =
+                    device.createRfcommSocketToServiceRecord(
+                        SERVICE_UUID
+                    )
 
                 bluetoothSocket =
                     socket
+
+                socket.connect()
 
                 outputStream =
                     socket.outputStream
 
                 runOnUiThread {
 
-                    statusText.text =
-                        "🟢 Bluetooth Connected"
-
-                    enableResultButtons(true)
-
-                    showToast(
-                        "Analyzer connected"
-                    )
+                    onConnected()
                 }
 
             } catch (e: Exception) {
 
+                /*
+                 * If secure RFCOMM fails,
+                 * try insecure RFCOMM.
+                 */
+
                 try {
+
                     socket?.close()
+
                 } catch (_: Exception) {
                 }
 
-                bluetoothSocket = null
-                outputStream = null
+                try {
 
-                runOnUiThread {
+                    socket =
+                        device.createInsecureRfcommSocketToServiceRecord(
+                            SERVICE_UUID
+                        )
 
-                    statusText.text =
-                        "🔴 Connection Failed"
+                    bluetoothSocket =
+                        socket
 
-                    enableResultButtons(false)
+                    socket.connect()
 
-                    showToast(
-                        "Connection failed:\n${e.message}"
-                    )
+                    outputStream =
+                        socket.outputStream
+
+                    runOnUiThread {
+
+                        onConnected()
+                    }
+
+                } catch (e2: Exception) {
+
+                    try {
+
+                        socket?.close()
+
+                    } catch (_: Exception) {
+                    }
+
+                    runOnUiThread {
+
+                        connectButton.isEnabled =
+                            true
+
+                        statusText.text =
+                            "Connection failed:\n" +
+                            "${e2.message}"
+                    }
                 }
             }
         }
     }
 
-    // =========================================================
-    // BUTTONS
-    // =========================================================
+    private fun onConnected() {
 
-    private fun enableResultButtons(
-        enabled: Boolean
-    ) {
+        statusText.text =
+            "✅ Analyzer Connected"
 
         dragonButton.isEnabled =
-            enabled
+            true
 
         tigerButton.isEnabled =
-            enabled
-    }
+            true
 
-    // =========================================================
-    // SEND
-    // =========================================================
+        connectButton.isEnabled =
+            false
+
+        Toast.makeText(
+            this,
+            "Connected Successfully",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
 
     private fun sendResult(
         result: String
@@ -613,9 +546,11 @@ class MainActivity : Activity() {
 
         if (stream == null) {
 
-            showToast(
-                "Bluetooth connected नहीं है"
-            )
+            Toast.makeText(
+                this,
+                "Analyzer connected नहीं है",
+                Toast.LENGTH_SHORT
+            ).show()
 
             return
         }
@@ -637,15 +572,8 @@ class MainActivity : Activity() {
 
                 runOnUiThread {
 
-                    showToast(
-                        if (
-                            result == "DRAGON"
-                        ) {
-                            "🐉 DRAGON भेज दिया"
-                        } else {
-                            "🐯 TIGER भेज दिया"
-                        }
-                    )
+                    statusText.text =
+                        "Sent: $result"
                 }
 
             } catch (e: IOException) {
@@ -653,54 +581,33 @@ class MainActivity : Activity() {
                 runOnUiThread {
 
                     statusText.text =
-                        "🔴 Connection Lost"
+                        "Send failed: ${e.message}"
 
-                    enableResultButtons(false)
+                    dragonButton.isEnabled =
+                        false
 
-                    showToast(
-                        "Send failed:\n${e.message}"
-                    )
+                    tigerButton.isEnabled =
+                        false
                 }
-
-                closeConnection()
             }
         }
     }
 
-    // =========================================================
-    // CLOSE
-    // =========================================================
-
-    private fun closeConnection() {
-
-        try {
-            outputStream?.close()
-        } catch (_: Exception) {
-        }
-
-        try {
-            bluetoothSocket?.close()
-        } catch (_: Exception) {
-        }
-
-        outputStream = null
-        bluetoothSocket = null
-    }
-
-    private fun showToast(
-        message: String
-    ) {
-
-        Toast.makeText(
-            this,
-            message,
-            Toast.LENGTH_SHORT
-        ).show()
-    }
-
     override fun onDestroy() {
 
-        closeConnection()
+        try {
+
+            outputStream?.close()
+
+        } catch (_: Exception) {
+        }
+
+        try {
+
+            bluetoothSocket?.close()
+
+        } catch (_: Exception) {
+        }
 
         super.onDestroy()
     }
