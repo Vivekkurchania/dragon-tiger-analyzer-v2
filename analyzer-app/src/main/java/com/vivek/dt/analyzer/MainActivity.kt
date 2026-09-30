@@ -5,6 +5,7 @@ import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
@@ -39,24 +40,20 @@ class MainActivity : Activity() {
     private lateinit var resultText: TextView
 
     private var bluetoothAdapter: BluetoothAdapter? = null
-
     private var serverSocket: BluetoothServerSocket? = null
 
     private val results =
         ArrayDeque<String>()
 
-    override fun onCreate(
-        savedInstanceState: Bundle?
-    ) {
-
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         bluetoothAdapter =
             BluetoothAdapter.getDefaultAdapter()
 
-        requestBluetoothPermission()
-
         createUI()
+
+        requestBluetoothPermission()
 
         showAnalyzerQR()
 
@@ -87,11 +84,9 @@ class MainActivity : Activity() {
 
     private fun createUI() {
 
-        val scrollView =
-            ScrollView(this)
+        val scrollView = ScrollView(this)
 
-        val layout =
-            LinearLayout(this)
+        val layout = LinearLayout(this)
 
         layout.orientation =
             LinearLayout.VERTICAL
@@ -103,69 +98,50 @@ class MainActivity : Activity() {
             30
         )
 
-        val title =
-            TextView(this)
+        val title = TextView(this)
 
         title.text =
             "📊 DRAGON TIGER ANALYZER"
 
-        title.textSize =
-            25f
+        title.textSize = 25f
 
-        title.setPadding(
-            0,
-            0,
-            0,
-            15
-        )
-
-        statusText =
-            TextView(this)
+        statusText = TextView(this)
 
         statusText.text =
             "🔵 Starting Analyzer..."
 
-        statusText.textSize =
-            18f
+        statusText.textSize = 18f
 
         statusText.setPadding(
             0,
-            10,
+            15,
             0,
             20
         )
 
-        val qrTitle =
-            TextView(this)
+        val qrTitle = TextView(this)
 
         qrTitle.text =
             "📱 इस QR को Sender phone से scan करें"
 
-        qrTitle.textSize =
-            18f
+        qrTitle.textSize = 18f
 
-        qrImage =
-            ImageView(this)
+        qrImage = ImageView(this)
 
-        qrImage.adjustViewBounds =
-            true
+        qrImage.adjustViewBounds = true
 
-        qrImage.minimumHeight =
-            500
+        qrImage.minimumHeight = 500
 
-        val refreshButton =
-            Button(this)
+        val refreshButton = Button(this)
 
         refreshButton.text =
             "🔄 REFRESH QR"
 
         refreshButton.setOnClickListener {
-
             showAnalyzerQR()
         }
 
-        resultText =
-            TextView(this)
+        resultText = TextView(this)
 
         resultText.text =
             """
@@ -180,26 +156,13 @@ class MainActivity : Activity() {
             —
             """.trimIndent()
 
-        resultText.textSize =
-            19f
-
-        resultText.setPadding(
-            0,
-            25,
-            0,
-            25
-        )
+        resultText.textSize = 19f
 
         layout.addView(title)
-
         layout.addView(statusText)
-
         layout.addView(qrTitle)
-
         layout.addView(qrImage)
-
         layout.addView(refreshButton)
-
         layout.addView(resultText)
 
         scrollView.addView(layout)
@@ -208,7 +171,7 @@ class MainActivity : Activity() {
     }
 
     // =========================================================
-    // QR CODE
+    // QR
     // =========================================================
 
     private fun showAnalyzerQR() {
@@ -219,7 +182,7 @@ class MainActivity : Activity() {
         if (adapter == null) {
 
             statusText.text =
-                "❌ इस phone में Bluetooth नहीं है"
+                "❌ Bluetooth unavailable"
 
             return
         }
@@ -228,37 +191,23 @@ class MainActivity : Activity() {
 
             val deviceName =
                 try {
-
                     adapter.name
                         ?: "DragonTiger-Analyzer"
-
                 } catch (_: SecurityException) {
-
                     "DragonTiger-Analyzer"
                 }
 
             val address =
                 try {
-
                     adapter.address
-
                 } catch (_: SecurityException) {
-
                     ""
                 }
-
-            /*
-             * IMPORTANT:
-             *
-             * Sender इसी format को पढ़ेगा:
-             *
-             * DRAGON_TIGER_ANALYZER|NAME|MAC
-             */
 
             val payload =
                 "DRAGON_TIGER_ANALYZER|$deviceName|$address"
 
-            val matrix: BitMatrix =
+            val matrix =
                 MultiFormatWriter().encode(
                     payload,
                     BarcodeFormat.QR_CODE,
@@ -273,9 +222,7 @@ class MainActivity : Activity() {
                     700
                 )
 
-            qrImage.setImageBitmap(
-                bitmap
-            )
+            qrImage.setImageBitmap(bitmap)
 
             statusText.text =
                 """
@@ -310,15 +257,10 @@ class MainActivity : Activity() {
 
             for (x in 0 until width) {
 
-                pixels[
-                    y * width + x
-                ] =
+                pixels[y * width + x] =
                     if (matrix[x, y]) {
-
                         0xFF000000.toInt()
-
                     } else {
-
                         0xFFFFFFFF.toInt()
                     }
             }
@@ -344,24 +286,22 @@ class MainActivity : Activity() {
 
                 val adapter =
                     bluetoothAdapter
-
                         ?: throw Exception(
                             "Bluetooth unavailable"
                         )
 
-                if (Build.VERSION.SDK_INT >=
+                if (
+                    Build.VERSION.SDK_INT >=
                     Build.VERSION_CODES.S
                 ) {
 
                     if (
                         checkSelfPermission(
                             Manifest.permission.BLUETOOTH_CONNECT
-                        ) !=
-                        android.content.pm.PackageManager.PERMISSION_GRANTED
+                        ) != PackageManager.PERMISSION_GRANTED
                     ) {
 
                         runOnUiThread {
-
                             statusText.text =
                                 "🔐 Bluetooth permission required"
                         }
@@ -370,6 +310,15 @@ class MainActivity : Activity() {
                     }
                 }
 
+                // Close old server if any
+                try {
+                    serverSocket?.close()
+                } catch (_: Exception) {
+                }
+
+                /*
+                 * Secure RFCOMM server.
+                 */
                 serverSocket =
                     adapter.listenUsingRfcommWithServiceRecord(
                         SERVICE_NAME,
@@ -379,24 +328,38 @@ class MainActivity : Activity() {
                 runOnUiThread {
 
                     statusText.text =
-                        "🟢 QR READY — Sender का इंतजार..."
+                        "🟢 READY — Sender का इंतजार..."
                 }
 
                 while (true) {
 
-                    val socket =
-                        serverSocket?.accept()
-                            ?: break
+                    try {
 
-                    runOnUiThread {
+                        val socket =
+                            serverSocket?.accept()
+                                ?: break
 
-                        statusText.text =
-                            "🟢 SENDER CONNECTED"
+                        runOnUiThread {
+
+                            statusText.text =
+                                "🟢 SENDER CONNECTED"
+                        }
+
+                        handleConnection(socket)
+
+                    } catch (e: Exception) {
+
+                        if (!isFinishing) {
+
+                            runOnUiThread {
+
+                                statusText.text =
+                                    "🟡 Waiting for Sender..."
+                            }
+                        }
+
+                        // Continue listening
                     }
-
-                    handleConnection(
-                        socket
-                    )
                 }
 
             } catch (e: Exception) {
@@ -411,7 +374,7 @@ class MainActivity : Activity() {
     }
 
     // =========================================================
-    // RECEIVE DATA
+    // CONNECTION
     // =========================================================
 
     private fun handleConnection(
@@ -422,19 +385,62 @@ class MainActivity : Activity() {
 
             try {
 
-                val reader =
+                val input =
                     socket.inputStream
-                        .bufferedReader()
+
+                val buffer =
+                    ByteArray(1024)
+
+                val textBuffer =
+                    StringBuilder()
 
                 while (true) {
 
-                    val message =
-                        reader.readLine()
-                            ?: break
+                    val count =
+                        input.read(buffer)
 
-                    processReceivedResult(
-                        message.trim()
-                    )
+                    if (count <= 0) {
+                        break
+                    }
+
+                    val text =
+                        String(
+                            buffer,
+                            0,
+                            count,
+                            Charsets.UTF_8
+                        )
+
+                    textBuffer.append(text)
+
+                    var newlineIndex =
+                        textBuffer.indexOf("\n")
+
+                    while (newlineIndex >= 0) {
+
+                        val message =
+                            textBuffer
+                                .substring(
+                                    0,
+                                    newlineIndex
+                                )
+                                .trim()
+
+                        textBuffer.delete(
+                            0,
+                            newlineIndex + 1
+                        )
+
+                        if (message.isNotEmpty()) {
+
+                            processReceivedResult(
+                                message
+                            )
+                        }
+
+                        newlineIndex =
+                            textBuffer.indexOf("\n")
+                    }
                 }
 
             } catch (e: Exception) {
@@ -442,39 +448,29 @@ class MainActivity : Activity() {
                 runOnUiThread {
 
                     statusText.text =
-                        "🔴 Sender disconnected"
+                        "🟡 Sender disconnected\nWaiting..."
                 }
+
             } finally {
 
                 try {
-
                     socket.close()
-
                 } catch (_: Exception) {
                 }
+
+                // Server remains available for
+                // the next Sender connection.
             }
         }
     }
 
     // =========================================================
-    // PROCESS RESULT
+    // RESULT
     // =========================================================
 
     private fun processReceivedResult(
         message: String
     ) {
-
-        /*
-         * Sender may send:
-         *
-         * DRAGON
-         * TIGER
-         *
-         * or:
-         *
-         * D
-         * T
-         */
 
         val result =
             when {
@@ -503,14 +499,12 @@ class MainActivity : Activity() {
             }
 
         if (result == null) {
-
             return
         }
 
         synchronized(results) {
 
             if (results.size >= 100) {
-
                 results.removeFirst()
             }
 
@@ -518,7 +512,6 @@ class MainActivity : Activity() {
         }
 
         runOnUiThread {
-
             updateAnalysis()
         }
     }
@@ -531,7 +524,6 @@ class MainActivity : Activity() {
 
         val data =
             synchronized(results) {
-
                 results.toList()
             }
 
@@ -554,21 +546,13 @@ class MainActivity : Activity() {
         }
 
         val dragonCount =
-            data.count {
-                it == "D"
-            }
+            data.count { it == "D" }
 
         val tigerCount =
-            data.count {
-                it == "T"
-            }
+            data.count { it == "T" }
 
         val last =
             data.last()
-
-        // -----------------------------------------------------
-        // TRANSITIONS
-        // -----------------------------------------------------
 
         var dd = 0
         var dt = 0
@@ -577,72 +561,46 @@ class MainActivity : Activity() {
 
         for (i in 1 until data.size) {
 
-            val pair =
+            when (
                 data[i - 1] + data[i]
-
-            when (pair) {
+            ) {
 
                 "DD" -> dd++
-
                 "DT" -> dt++
-
                 "TD" -> td++
-
                 "TT" -> tt++
             }
         }
-
-        // -----------------------------------------------------
-        // TRANSITION PROBABILITY
-        // -----------------------------------------------------
 
         val transitionDragon =
             if (last == "D") {
 
                 (dd + 1.0) /
-                        (dd + dt + 2.0)
+                    (dd + dt + 2.0)
 
             } else {
 
                 (td + 1.0) /
-                        (td + tt + 2.0)
+                    (td + tt + 2.0)
             }
-
-        // -----------------------------------------------------
-        // FREQUENCY
-        // -----------------------------------------------------
 
         val frequencyDragon =
             (dragonCount + 1.0) /
-                    (data.size + 2.0)
-
-        // -----------------------------------------------------
-        // COMBINED STATISTICAL SCORE
-        // -----------------------------------------------------
+                (data.size + 2.0)
 
         val score =
-            (
-                transitionDragon * 0.60
-                    +
-                frequencyDragon * 0.40
-            )
+            transitionDragon * 0.60 +
+            frequencyDragon * 0.40
 
         val estimate =
             if (score >= 0.50) {
-
                 "🐉 DRAGON"
-
             } else {
-
                 "🐯 TIGER"
             }
 
         val scorePercent =
             (score * 100).toInt()
-
-        // -----------------------------------------------------
-        // DISPLAY
-        // -----------------------------------------------------
 
         resultText.text =
             """
@@ -677,24 +635,18 @@ class MainActivity : Activity() {
             
             ----------------------------
             
-            ⚠️ यह केवल historical/statistical
+            ⚠️ यह historical/statistical
             analysis है।
             
-            RNG game outcome guaranteed
+            RNG outcome guaranteed
             predict नहीं किया जा सकता।
             """.trimIndent()
     }
 
-    // =========================================================
-    // DESTROY
-    // =========================================================
-
     override fun onDestroy() {
 
         try {
-
             serverSocket?.close()
-
         } catch (_: Exception) {
         }
 
