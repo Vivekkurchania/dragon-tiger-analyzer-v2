@@ -1,0 +1,44 @@
+name: Build Android APKs
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build Sender
+        run: gradle :sender-app:assembleDebug --no-daemon
+
+      - name: Build Analyzer
+        run: gradle :analyzer-app:assembleDebug --no-daemon
+
+      - name: Prepare APKs
+        run: |
+          mkdir -p apk-output
+          cp sender-app/build/outputs/apk/debug/*.apk apk-output/Dragon-Tiger-Sender.apk
+          cp analyzer-app/build/outputs/apk/debug/*.apk apk-output/Dragon-Tiger-Analyzer.apk
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: dragon-tiger-apks
+          path: apk-output/
